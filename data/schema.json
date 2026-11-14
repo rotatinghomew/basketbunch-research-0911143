@@ -1,0 +1,62 @@
+{
+  "shipping_rules": {
+    "key": "id",
+    "columns": {
+      "id": "text",
+      "region": "text",
+      "valid_from": "date",
+      "valid_to": "date",
+      "threshold": "money",
+      "amount_basis": "text",
+      "shipping_fee": "money"
+    },
+    "description": "生效期左闭右开，包邮为 qualifying_amount 大于等于 threshold；配送券不改变凑单运行变量。",
+    "references": {}
+  },
+  "orders": {
+    "key": "id",
+    "columns": {
+      "id": "text",
+      "created_at": "time",
+      "region": "text",
+      "rule_id": "text",
+      "qualifying_amount": "money",
+      "delivery_coupon": "money",
+      "cancelled": "bool"
+    },
+    "description": "顾客确认时的计费资格金额，单位元，精确到分；取消订单与成交订单仍可分别研究。",
+    "references": {
+      "rule_id": "shipping_rules.id"
+    }
+  },
+  "order_lines": {
+    "key": "id",
+    "columns": {
+      "id": "text",
+      "order_id": "text",
+      "sku": "text",
+      "quantity": "int",
+      "unit_price": "money",
+      "discount": "money"
+    },
+    "description": "单行商品折后总额为 quantity 乘 unit_price 减 discount，discount 为整行折扣。",
+    "references": {
+      "order_id": "orders.id"
+    }
+  },
+  "settlements": {
+    "key": "id",
+    "columns": {
+      "id": "text",
+      "order_id": "text",
+      "day": "date",
+      "refund": "money",
+      "fulfillment_cost": "money",
+      "product_cost": "money"
+    },
+    "description": "事后退款及成本用于经营解释，不改写顾客当时看到的计费资格金额；每单一份最新核准结算。",
+    "references": {
+      "order_id": "orders.id"
+    }
+  }
+}
