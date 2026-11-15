@@ -2,10 +2,20 @@ import json
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
 
+from .bunching import StudyError, study
 from .cases import CaseStore
 from .catalog import Catalog
 from .domain import overview
 from .profile import numeric_profiles
+
+
+def _optional_float(query, name):
+    if name not in query:
+        return None
+    try:
+        return float(query[name][0])
+    except (TypeError, ValueError) as error:
+        raise ValueError(f"{name} 不是有效数值") from error
 
 
 class Application:
@@ -34,6 +44,19 @@ class Application:
                 return 200, {"source_fingerprint": self.catalog.fingerprint, "view": overview(self.catalog)}
             if method == "GET" and path == "/profiles":
                 return 200, {"source_fingerprint": self.catalog.fingerprint, "profiles": numeric_profiles(self.catalog)}
+            if method == "GET" and path == "/bunching":
+                threshold = query.get("threshold", [None])[0]
+                window = _optional_float(query, "window")
+                exclusion = _optional_float(query, "exclusion")
+                model = query.get("model", [None])[0]
+                options = {}
+                if window is not None:
+                    options["window"] = window
+                if exclusion is not None:
+                    options["exclusion"] = exclusion
+                if model is not None:
+                    options["model"] = model
+                return 200, study(self.catalog, threshold, **options)
             if method == "GET" and path == "/cases":
                 return 200, {"cases": self.cases.list()}
             if method == "GET" and path.startswith("/cases/"):
@@ -46,6 +69,8 @@ class Application:
                 return 201, self.cases.create(self.catalog, body.get("label"), body.get("options"), body.get("notes", ""))
         except KeyError:
             return 404, {"error": "记录不存在"}
+        except StudyError as error:
+            return 400, {"error": str(error)}
         except (TypeError, ValueError) as error:
             return 400, {"error": str(error)}
         return 404, {"error": "接口不存在"}

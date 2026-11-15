@@ -100,6 +100,42 @@ class ServiceTests(unittest.TestCase):
             for values in fields.values():
                 self.assertEqual(values["observed"] + values["missing"], len(self.application.catalog.rows(name)))
 
+    def test_bunching_endpoint(self):
+        status, result = self.application.dispatch("GET", "/bunching")
+        self.assertEqual(status, 200)
+        self.assertEqual(result["status"], "ok")
+        self.assertEqual(result["source_fingerprint"], self.application.catalog.fingerprint)
+        self.assertEqual(result["observed_thresholds"], ["79.00", "99.00"])
+        for threshold in result["thresholds"]:
+            self.assertIn(threshold["identification"]["status"], ("supported", "insufficient"))
+            self.assertIn("translation", threshold["economics"])
+
+    def test_bunching_requested_and_unobserved_threshold(self):
+        status, result = self.application.dispatch("GET", "/bunching?threshold=79")
+        self.assertEqual(status, 200)
+        self.assertEqual([item["threshold"] for item in result["thresholds"]], ["79.00"])
+        status, result = self.application.dispatch("GET", "/bunching?threshold=59")
+        self.assertEqual(status, 200)
+        self.assertEqual(result["status"], "out_of_support")
+        self.assertNotIn("thresholds", result)
+
+    def test_bunching_parameters_validated(self):
+        self.assertEqual(self.application.dispatch("GET", "/bunching?model=linear")[0], 400)
+        self.assertEqual(self.application.dispatch("GET", "/bunching?window=abc")[0], 400)
+        self.assertEqual(self.application.dispatch("GET", "/bunching?window=20&exclusion=5")[0], 400)
+
+    def test_bunching_over_http(self):
+        server = make_server(self.application, port=0)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        with urlopen(f"http://127.0.0.1:{server.server_port}/bunching?threshold=79", timeout=5) as response:
+            self.assertEqual(response.status, 200)
+            payload = json.loads(response.read())
+        self.assertEqual(payload["thresholds"][0]["threshold"], "79.00")
+        self.assertFalse(payload["thresholds"][0]["running_variable"]["reclassified"])
+
     def test_real_http(self):
         server = make_server(self.application, port=0)
         thread = threading.Thread(target=server.serve_forever, daemon=True)

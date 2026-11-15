@@ -13,9 +13,19 @@ def main():
         thread.start()
         base = f"http://127.0.0.1:{server.server_port}"
         try:
-            for path in ("/health", "/tables", "/view"):
+            for path in ("/health", "/tables", "/view", "/bunching?threshold=79"):
                 with urlopen(base + path, timeout=5) as response:
-                    print(path, json.dumps(json.load(response), ensure_ascii=False))
+                    payload = json.load(response)
+                    if path.startswith("/bunching"):
+                        summary = {
+                            "status": payload["status"],
+                            "threshold": payload["thresholds"][0]["threshold"],
+                            "identification": payload["thresholds"][0]["identification"]["status"],
+                            "reasons": [item["code"] for item in payload["thresholds"][0]["identification"]["reasons"]],
+                        }
+                        print(path, json.dumps(summary, ensure_ascii=False))
+                    else:
+                        print(path, json.dumps(payload, ensure_ascii=False)[:400])
             request = Request(base + "/cases", data=json.dumps({"label": "月度经营讨论", "options": {"period": "2026-09"}}, ensure_ascii=False).encode(), headers={"Content-Type": "application/json"})
             with urlopen(request, timeout=5) as response:
                 created = json.load(response)
